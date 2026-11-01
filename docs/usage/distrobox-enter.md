@@ -11,6 +11,16 @@ entire commands to execute.
 If using it inside a script, an application, or a service, you can specify the
 `--no-tty` mode to disable tty and interactivity.
 
+In a graphical session, `distrobox enter` checks whether the host desktop portal
+can supply the window button layout. If this check succeeds, GTK applications
+use the portal (`GTK_USE_PORTAL=1`), including with a separate container home.
+The check uses `gdbus` on the calling system and has a 500 ms timeout. If `gdbus`
+or the setting is unavailable, the environment is left unchanged.
+This applies to interactive sessions and exported applications on Docker and
+Podman. An explicit `GTK_USE_PORTAL` value in the calling environment is
+preserved; set `GTK_USE_PORTAL=0` to opt out. Applications may also use portal
+file choosers when this setting is enabled.
+
 # SYNOPSIS
 
 **distrobox enter**

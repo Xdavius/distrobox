@@ -22,6 +22,7 @@ package containermanager_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -77,6 +78,60 @@ func TestFilterEnvVars(t *testing.T) {
 		"HOME=", "PATH=", "SHELL=", "HOSTNAME=", "XDG_SEAT=", "XDG_CONFIG_DIRS=", "_UNDERSCORE=", "DBX_TEST_BAD=",
 	} {
 		assert.False(t, has(dropped), dropped)
+	}
+}
+
+func TestFilterEnvVarsGTKPortal(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gdbus"), []byte("#!/bin/sh\nexit 0\n"), 0700))
+	t.Setenv("PATH", dir)
+	t.Setenv("WAYLAND_DISPLAY", "wayland-test")
+	for _, value := range []string{"unset", "0", "1", ""} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("GTK_USE_PORTAL", value)
+			expected := "GTK_USE_PORTAL=" + value
+			if value == "unset" {
+				require.NoError(t, os.Unsetenv("GTK_USE_PORTAL"))
+				expected = "GTK_USE_PORTAL=1"
+			}
+			var portalVars []string
+			for _, env := range containermanager.FilterEnvVars() {
+				if strings.HasPrefix(env, "GTK_USE_PORTAL=") {
+					portalVars = append(portalVars, env)
+				}
+			}
+			assert.Equal(t, []string{expected}, portalVars)
+		})
+	}
+}
+
+func TestFilterEnvVarsGTKPortalDetection(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		display string
+		wayland string
+		script  string
+		want    bool
+	}{
+		{"wayland", "", "wayland-test", "exit 0", true},
+		{"x11", ":1", "", "exit 0", true},
+		{"no desktop", "", "", "exit 0", false},
+		{"missing gdbus", "", "wayland-test", "", false},
+		{"unavailable setting", "", "wayland-test", "exit 1", false},
+		{"unresponsive portal", "", "wayland-test", "while :; do :; done", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GTK_USE_PORTAL", "")
+			require.NoError(t, os.Unsetenv("GTK_USE_PORTAL"))
+			t.Setenv("DISPLAY", tc.display)
+			t.Setenv("WAYLAND_DISPLAY", tc.wayland)
+			dir := t.TempDir()
+			t.Setenv("PATH", dir)
+			if tc.script != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "gdbus"), []byte("#!/bin/sh\n"+tc.script+"\n"), 0700))
+			}
+			assert.Equal(t, tc.want, slices.Contains(containermanager.FilterEnvVars(), "GTK_USE_PORTAL=1"))
+		})
 	}
 }
 

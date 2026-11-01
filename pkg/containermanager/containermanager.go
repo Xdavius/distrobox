@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"runtime"
 	"slices"
@@ -398,7 +399,31 @@ func FilterEnvVars() []string {
 		result = append(result, env)
 	}
 
+	// Preserve explicit overrides, including GTK_USE_PORTAL=0.
+	if _, configured := os.LookupEnv("GTK_USE_PORTAL"); !configured && desktopPortalSettingsAvailable() {
+		result = append(result, "GTK_USE_PORTAL=1")
+	}
+
 	return result
+}
+
+// desktopPortalSettingsAvailable checks the calling desktop session, once per
+// entry, without blocking entry when the portal is missing or unresponsive.
+func desktopPortalSettingsAvailable() bool {
+	if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "gdbus", "call", "--session",
+		"--dest", "org.freedesktop.portal.Desktop",
+		"--object-path", "/org/freedesktop/portal/desktop",
+		"--method", "org.freedesktop.portal.Settings.Read",
+		"org.gnome.desktop.wm.preferences", "button-layout")
+
+	return cmd.Run() == nil
 }
 
 // IsTTY returns true if both stdin and stdout are terminals.

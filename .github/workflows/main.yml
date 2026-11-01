@@ -32,6 +32,8 @@ jobs:
         with:
           go-version-file: "go.mod"
       - run: make test
+      - name: Test desktop export window classes
+        run: python3 hack/test/test-desktop-export.py
       - name: Test xdg-open relay
         run: python3 hack/test/test-xdg-open.py
 

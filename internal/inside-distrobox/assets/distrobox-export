@@ -585,8 +585,13 @@ export_application()
 				> "/run/host${host_home}/.local/share/applications/${desktop_home_file}"
 		# in the end we add the final quote we've opened in the "container_command_prefix"
 
-		sed -i -e '/StartupWMClass=/d' -e "/\[Desktop Entry\]/a\StartupWMClass=${desktop_original_file%.desktop}" \
-			"/run/host${host_home}/.local/share/applications/${desktop_home_file}"
+		# Preserve the application's window class: it need not match the desktop
+		# filename (for example, codium.desktop uses VSCodium).
+		# Only supply the historical fallback when no class is provided.
+		if ! grep -q '^StartupWMClass=.' "${desktop_file}"; then
+			sed -i -e '/^StartupWMClass=/d' -e "/\[Desktop Entry\]/a\StartupWMClass=${desktop_original_file%.desktop}" \
+				"/run/host${host_home}/.local/share/applications/${desktop_home_file}"
+		fi
 
 		# In case of an icon in a non canonical path, we need to replace the path
 		# in the desktop file.
