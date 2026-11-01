@@ -35,4 +35,4 @@ tags
 TODO.txt
 
 # Personal userspace installer
-/install-local.py
+/install-local.sh
