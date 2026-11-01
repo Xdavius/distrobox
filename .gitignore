@@ -33,3 +33,6 @@ go.work.sum
 tags
 *.vim
 TODO.txt
+
+# Personal userspace installer
+/install-local.py
