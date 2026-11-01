@@ -415,6 +415,74 @@ export_binary()
 	return 3
 }
 
+# Electron packages can advertise an X11 class that differs from their native
+# Wayland desktop identity. Inspect package metadata without launching the app.
+# Detection is optional; missing tools or ambiguous metadata preserve the source.
+electron_wayland_window_class()
+{
+	[ -n "${WAYLAND_DISPLAY:-}" ] || return 0
+	command -v python3 > /dev/null || return 0
+	python3 - "$1" << 'PY_ELECTRON_CLASS'
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+
+def query(*args):
+    return subprocess.run(args, check=True, capture_output=True, text=True,
+                          timeout=2).stdout.strip()
+
+
+def identity(desktop):
+    files = []
+    if shutil.which("pacman"):
+        owner = query("pacman", "-Qoq", str(desktop)).splitlines()
+        if len(owner) != 1:
+            return None
+        files = query("pacman", "-Qlq", owner[0]).splitlines()
+    elif shutil.which("dpkg-query"):
+        owner = query("dpkg-query", "-S", str(desktop)).splitlines()
+        if len(owner) != 1 or ": " not in owner[0]:
+            return None
+        files = query("dpkg-query", "-L", owner[0].split(": ", 1)[0]).splitlines()
+    elif shutil.which("rpm"):
+        files = query("rpm", "-ql", query("rpm", "-qf", str(desktop))).splitlines()
+    candidates = {Path(f) for f in files if f.endswith("/resources/app/package.json")}
+    if len(candidates) != 1:
+        return None
+    package_file = candidates.pop()
+    package = json.loads(package_file.read_text())
+    name = package.get("desktopName")
+    if not isinstance(name, str) or not name.endswith(".desktop"):
+        return None
+    # VS Code derivatives can override Electron's package default at startup.
+    product_file = package_file.with_name("product.json")
+    if product_file.is_file():
+        product = json.loads(product_file.read_text())
+        if os.environ.get("SNAP_INSTANCE_NAME"):
+            return None
+        override = product.get("linuxDesktopName")
+        if isinstance(override, str) and Path("/usr/share/applications", override + ".desktop").is_file():
+            name = override + ".desktop"
+    result = name[:-len(".desktop")]
+    # Only accept a desktop ID, never paths, control characters or sed syntax.
+    if result and all(c.isascii() and (c.isalnum() or c in "._-") for c in result):
+        return result
+    return None
+
+
+try:
+    result = identity(Path(sys.argv[1]))
+    if result:
+        print(result)
+except (OSError, ValueError, TypeError, AttributeError, subprocess.SubprocessError):
+    pass
+PY_ELECTRON_CLASS
+}
+
 # export_application will export input graphical application to the host.
 # the following function will scan the distrobox for desktop and icon files for
 # the selected application. It will then put the needed icons in the host's icons
@@ -585,10 +653,14 @@ export_application()
 				> "/run/host${host_home}/.local/share/applications/${desktop_home_file}"
 		# in the end we add the final quote we've opened in the "container_command_prefix"
 
-		# Preserve the application's window class: it need not match the desktop
-		# filename (for example, codium.desktop uses VSCodium).
-		# Only supply the historical fallback when no class is provided.
-		if ! grep -q '^StartupWMClass=.' "${desktop_file}"; then
+		# Prefer the native Wayland identity when an Electron package provides it.
+		# This keeps container-prefixed desktop filenames while allowing the dock
+		# to match the app's actual ID, without extra export options or a launch.
+		window_class="$(electron_wayland_window_class "${desktop_file}")"
+		if [ -n "${window_class}" ]; then
+			sed -i -e '/^StartupWMClass=/d' -e "/\[Desktop Entry\]/a\StartupWMClass=${window_class}" \
+				"/run/host${host_home}/.local/share/applications/${desktop_home_file}"
+		elif ! grep -q '^StartupWMClass=.' "${desktop_file}"; then
 			sed -i -e '/^StartupWMClass=/d' -e "/\[Desktop Entry\]/a\StartupWMClass=${desktop_original_file%.desktop}" \
 				"/run/host${host_home}/.local/share/applications/${desktop_home_file}"
 		fi

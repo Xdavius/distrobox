@@ -55,6 +55,20 @@ save them in your home to be used directly from the host as a normal app.
 
 This will skip searching for the desktopfile in canonical paths, and just use the provided file path.
 
+**Window grouping on Wayland**
+
+Exports keep their container-prefixed desktop filenames. On Wayland, when Python 3
+and a supported package manager (pacman, dpkg-query, or rpm) are available,
+Distrobox also inspects Electron package metadata for its native desktop ID.
+For example, Codium can declare `VSCodium` as its X11 class but use `codium` on
+Wayland. The export sets `StartupWMClass=codium` automatically in that case.
+No extra arguments are required, including when exporting through a GUI.
+
+This detection does not launch applications. Missing tools, unpackaged apps,
+packed or ambiguous metadata fall back to the original window class. Applications
+that change their identity at runtime may still require a separate fix. Identical
+IDs from multiple containers can remain ambiguous to the desktop.
+
 **Binary export example**
 
 	distrobox-export --bin /usr/bin/code --extra-flags "--foreground" --export-path $HOME/.local/bin
