@@ -111,11 +111,8 @@ func (c *GenerateEntryCommand) Execute(
 	// Determine DistroboxPath
 	distroboxPath := opts.DistroboxPath
 	if distroboxPath == "" {
-		p, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("cannot read distrobox path, %w", err)
-		}
-		distroboxPath = p
+		// Resolve the active installation through the desktop session's PATH.
+		distroboxPath = "distrobox"
 	}
 
 	// Create the desktop entries for all the containers

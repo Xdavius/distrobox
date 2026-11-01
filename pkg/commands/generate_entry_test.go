@@ -65,7 +65,6 @@ func TestGenerateEntryCommand_Execute(t *testing.T) {
 		Icon:                "https://raw.githubusercontent.com/89luca89/distrobox/main/icons/terminal-distrobox-icon.svg",
 		Root:                false,
 		DesktopEntryBaseDir: fmt.Sprintf("%s/.local/share/", tempDir),
-		DistroboxPath:       "/usr/bin/distrobox",
 	}
 
 	err := generateEntryCmd.Execute(ctx, opts)
@@ -79,18 +78,18 @@ Name=Test-container
 GenericName=Terminal entering Test-container
 Comment=Terminal entering Test-container
 Categories=Distrobox;System;Utility
-Exec=/usr/bin/distrobox enter test-container
+Exec=distrobox enter test-container
 Icon=https://raw.githubusercontent.com/89luca89/distrobox/main/icons/terminal-distrobox-icon.svg
 Keywords=distrobox;
 NoDisplay=false
 Terminal=true
-TryExec=/usr/bin/distrobox
+TryExec=distrobox
 Type=Application
 Actions=Remove;
 
 [Desktop Action Remove]
 Name=Remove Test-container from system
-Exec=/usr/bin/distrobox rm test-container
+Exec=distrobox rm test-container
 `
 
 	content, err := os.ReadFile(expectedEntryPath)
